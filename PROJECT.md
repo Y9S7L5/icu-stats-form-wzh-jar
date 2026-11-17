@@ -189,7 +189,7 @@ xcopy /E /Y /I sjm1-app\dist\sjm1-app\browser\* src\main\resources\static\form\
 mvn clean package -DskipTests
 
 # 4. 验证 JAR
-jar tf target\backend-from-0.0.1.jar | Select-String "static/form/main"
+jar tf target\backend-from-wzh-0.0.1.jar | Select-String "static/form/main"
 
 # 5. Git 提交推送
 git add -A

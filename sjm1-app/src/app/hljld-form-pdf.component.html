@@ -104,6 +104,11 @@
       >
         {{ isLoadingAllPdf ? '生成中...' : (isPrinting ? '打印中...' : '一键打印全部') }}
       </button>
+
+      <app-archive-button
+        formKey="hljldFormPDF"
+        [disabled]="!patient.pid || isPrinting || isLoadingAllPdf"
+      ></app-archive-button>
     </div>
   </header>
 

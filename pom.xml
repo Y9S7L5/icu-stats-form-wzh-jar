@@ -67,6 +67,8 @@
     </dependencies>
 
     <build>
+        <!-- 产物固定命名：backend-from-wzh-0.0.1.jar -->
+        <finalName>backend-from-wzh-0.0.1</finalName>
         <resources>
             <!-- 默认资源（application.yml、static/ 等） -->
             <resource>

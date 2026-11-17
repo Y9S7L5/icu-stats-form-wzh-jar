@@ -3,6 +3,7 @@
   <button class="btn" type="button" (click)="openEditList()" [disabled]="!patient">编辑</button>
   <app-print-page-multi-select [totalPages]="pages.length" [(selectedPages)]="selectedPrintPages" [disabled]="loading"></app-print-page-multi-select>
   <button class="btn primary" (click)="print()">打印</button>
+  <app-archive-button formKey="hlmbForm" [disabled]="loading"></app-archive-button>
 </div>
 <div *ngIf="loading" class="status">加载中…</div>
 <div *ngIf="loadError" class="status error">{{loadError}} <button (click)="load()">重试</button></div>

@@ -8,7 +8,7 @@ import { IcuFormViewerFormDef } from './icu-form-viewer.models';
  * - transfusionForm：输血记录单（第三方输血系统 iframe 调阅）
  * - temperatureRecord：体温单（第三方）
  * - bloodSugar：血糖单（第三方）
- * - printCenter：打印工具，不是患者业务表单
+ * - printCenter：批量归档工具，不是患者业务表单
  * - hljldFormPDF：旧护理记录单技术路由，与新护理记录单重复
  */
 export const ICU_VIEWER_FORMS: IcuFormViewerFormDef[] = [

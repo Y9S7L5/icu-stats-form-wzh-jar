@@ -3,6 +3,7 @@
   <button class="btn secondary" type="button" (click)="openEditList()" [disabled]="!patient">编辑</button>
   <app-print-page-multi-select [totalPages]="pages.length" [(selectedPages)]="selectedPrintPages" [disabled]="loading"></app-print-page-multi-select>
   <button class="btn" type="button" (click)="print()" [disabled]="!pages.length">打印</button>
+  <app-archive-button formKey="sggrfkcsForm" [disabled]="!pages.length"></app-archive-button>
 </div></div>
 <div class="status" *ngIf="loading">加载中…</div>
 <div class="status error" *ngIf="loadError">{{loadError}} <button class="text-btn" type="button" (click)="retry()">重试</button></div>

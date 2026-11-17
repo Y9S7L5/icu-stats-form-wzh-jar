@@ -128,6 +128,7 @@ interface RenderPage { index: number; rows: (IadRow | null)[]; diagnosis?: strin
           [disabled]="loading"
         ></app-print-page-multi-select>
         <button class="btn" type="button" (click)="print()">打印</button>
+        <app-archive-button formKey="IADForm" [disabled]="loading"></app-archive-button>
       </div>
     </div>
 

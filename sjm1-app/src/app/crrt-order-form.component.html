@@ -12,6 +12,7 @@
       [disabled]="loading || printingAll || !record?.id"
     ></app-print-page-multi-select>
     <button class="btn" type="button" (click)="print()">打印</button>
+    <app-archive-button formKey="crrtOrderForm" [disabled]="loading || !record?.id"></app-archive-button>
     <button class="btn" type="button" [disabled]="printingAll || loading || timeOptions.length === 0" (click)="printAllOrders()">{{ printingAll ? '准备打印…' : '一键打印全部' }}</button>
   </div>
 </header>

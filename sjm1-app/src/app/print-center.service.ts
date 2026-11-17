@@ -155,7 +155,7 @@ export class PrintCenterService {
         row.sheets = this.harvest(host);
         row.renderedPages = row.sheets.length;
         row.state = row.renderedPages > 0 ? 'ready' : 'failed';
-        if (row.renderedPages === 0) { row.errorText = '未渲染出可打印内容'; }
+        if (row.renderedPages === 0) { row.errorText = '未渲染出表单内容'; }
       } catch (error) {
         row.state = 'failed';
         row.sheets = [];
@@ -317,7 +317,7 @@ export class PrintCenterService {
    * Angular 为组件注入的 <style> 带有 _ngcontent-* 属性，与 clone 的 DOM 搭配使用。
    * 只提取一次，避免重复收集。
    */
-  private collectScopedStyles(): string {
+  collectScopedStyles(): string {
     if (!this.stageEl) { return ''; }
     const seen = new Set<string>();
     const parts: string[] = [];

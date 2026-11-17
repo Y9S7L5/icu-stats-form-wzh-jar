@@ -128,6 +128,7 @@ interface RenderPage { index: number; cols: EvalColumn[]; diagnosis?: string; }
           [disabled]="loading"
         ></app-print-page-multi-select>
         <button class="btn" (click)="onPrint()">打印</button>
+        <app-archive-button formKey="toleranceForm" [disabled]="loading"></app-archive-button>
       </div>
     </div>
 

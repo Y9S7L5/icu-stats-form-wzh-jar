@@ -7,6 +7,7 @@
     [disabled]="loading"
   ></app-print-page-multi-select>
   <button class="btn" type="button" (click)="print()" [disabled]="!pages.length">打印</button>
+  <app-archive-button formKey="jkjyForm" [disabled]="!pages.length"></app-archive-button>
 </div></div>
 <div class="loading" *ngIf="loading">加载中…</div>
 <div class="loading error" *ngIf="loadError">{{loadError}} <button class="text-btn" (click)="reload()">重试</button></div>

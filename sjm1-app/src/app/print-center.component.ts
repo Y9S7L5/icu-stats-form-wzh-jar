@@ -6,6 +6,8 @@ import { distinctUntilChanged, filter, map, switchMap, takeUntil } from 'rxjs/op
 import { HostPatientService } from './services/host-patient.service';
 import { formatShanghaiDateMinute } from './form-date.util';
 import { PrintCenterService } from './print-center.service';
+import { ArchiveService } from './archive.service';
+import { isArchivable } from './archive.registry';
 import { PRINT_FORMS, PRINT_GROUP_NAMES, VIEW_ONLY_FORMS } from './print-center.registry';
 import { PrintGroupKey, PrintGroupView, PrintRow } from './print-center.models';
 import { firstDiagnosisSegment, resolveDiagnosisDisplay } from './diagnosis-history.util';
@@ -25,6 +27,8 @@ export class PrintCenterComponent implements OnInit, OnDestroy {
   stageWrap!: ElementRef<HTMLElement>;
 
   readonly viewOnlyForms = VIEW_ONLY_FORMS;
+  /** 批量归档仅覆盖 archive.registry.ts 配置的表单（输血记录单等打印表单不参与） */
+  private readonly archiveDefs = PRINT_FORMS.filter(def => isArchivable(def.key));
 
   patient: any = null;
   pid = '';
@@ -36,8 +40,7 @@ export class PrintCenterComponent implements OnInit, OnDestroy {
   scanning = false;
   scanError = '';
 
-  preparing = false;
-  printing = false;
+  archiving = false;
   progressText = '';
   finishedSummary = '';
 
@@ -49,8 +52,9 @@ export class PrintCenterComponent implements OnInit, OnDestroy {
     private readonly service: PrintCenterService,
     private readonly cdr: ChangeDetectorRef,
     private readonly diagHistory: DiagnosisHistoryService,
+    private readonly archive: ArchiveService,
   ) {
-    this.rows = PRINT_FORMS.map(def => ({
+    this.rows = this.archiveDefs.map(def => ({
       def, selected: false, hasData: false, count: 0,
       estimatedPages: 0, renderedPages: 0, selectedPages: [],
       sheets: [], state: 'idle', errorText: '',
@@ -96,24 +100,13 @@ export class PrintCenterComponent implements OnInit, OnDestroy {
       .filter(group => group.rows.length > 0);
   }
 
-  get busy(): boolean { return this.scanning || this.preparing || this.printing; }
+  get busy(): boolean { return this.scanning || this.archiving; }
   get selectedRows(): PrintRow[] { return this.rows.filter(r => r.selected && r.hasData); }
-  get selectedCount(): number { return this.selectedRows.length; }
   get dataCount(): number { return this.rows.filter(r => r.hasData).length; }
-  get canPrint(): boolean { return !!this.pid && !this.busy && this.selectedCount > 0; }
 
-  get estimatedPages(): number {
-    return this.selectedRows.reduce(
-      (sum, row) => sum + (row.renderedPages || row.estimatedPages || 1), 0);
-  }
-
-  get orientationHint(): string {
-    const landscape = this.selectedRows.filter(r => r.def.orientation === 'landscape').length;
-    const portrait = this.selectedRows.length - landscape;
-    const jobs = (landscape > 0 ? 1 : 0) + (portrait > 0 ? 1 : 0);
-    if (jobs <= 1) { return ''; }
-    return `横向 ${landscape} 份 / 纵向 ${portrait} 份，将分 ${jobs} 次调起打印对话框。`;
-  }
+  /** 所选行中配置了归档的表单（archive.registry.ts 白名单，输血记录单等被排除） */
+  get archiveTargets(): PrintRow[] { return this.selectedRows.filter(r => isArchivable(r.def.key)); }
+  get canArchive(): boolean { return !!this.pid && !this.busy && this.archiveTargets.length > 0; }
 
   groupSelectedCount(group: PrintGroupView): number {
     return group.rows.filter(r => r.selected).length;
@@ -151,7 +144,7 @@ export class PrintCenterComponent implements OnInit, OnDestroy {
     this.scanning = true;
     this.scanError = '';
     this.finishedSummary = '';
-    this.service.loadAvailability(this.pid, PRINT_FORMS)
+    this.service.loadAvailability(this.pid, this.archiveDefs)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: table => {
@@ -186,17 +179,28 @@ export class PrintCenterComponent implements OnInit, OnDestroy {
     group.rows.forEach(row => { if (row.hasData) { row.selected = checked; } });
   }
 
-  /** 预检：离屏渲染并统计真实页数，之后行内页码选择才可用 */
-  async prepare(): Promise<boolean> {
-    const targets = this.selectedRows;
-    if (!targets.length) { return false; }
-    this.preparing = true;
+  cancel(): void { this.cancelled = true; }
+
+  /**
+   * 批量归档：离屏渲染所选表单 → 逐表 POST /api/v1/icu/archives。
+   * 归档是整表快照（不按打印页码勾选过滤）。
+   */
+  async startArchive(): Promise<void> {
+    if (!this.canArchive) { return; }
+
+    // 设置离屏舞台引用，用于提取 scoped 样式
+    if (this.stageWrap) {
+      this.service.setStageElement(this.stageWrap.nativeElement);
+    }
+
+    this.archiving = true;
     this.cancelled = false;
     this.finishedSummary = '';
     this.cdr.detectChanges();
     try {
+      // 1. 渲染并采集（仅所选且配置了归档的表单）
       await this.service.collect(
-        targets,
+        this.archiveTargets,
         this.stageHost,
         row => {
           this.progressText = `正在渲染：${row.def.title}`;
@@ -204,68 +208,46 @@ export class PrintCenterComponent implements OnInit, OnDestroy {
         },
         () => this.cancelled,
       );
-      return true;
-    } finally {
-      this.preparing = false;
-      this.progressText = '';
-      this.cdr.detectChanges();
-    }
-  }
+      if (this.cancelled) {
+        this.finishedSummary = '已取消归档。';
+        return;
+      }
 
-  async startPrint(): Promise<void> {
-    if (!this.canPrint) { return; }
+      // 2. 逐表提交归档（共享同一份离屏 scoped 样式）
+      const scopedStyles = this.service.collectScopedStyles();
+      const ready = this.archiveTargets.filter(r => r.state === 'ready');
+      let ok = 0;
+      const failNames: string[] = [];
+      for (let i = 0; i < ready.length; i++) {
+        if (this.cancelled) { break; }
+        const row = ready[i];
+        this.progressText = `正在归档（${i + 1}/${ready.length}）：${row.def.title}`;
+        this.cdr.detectChanges();
+        try {
+          await this.archive.archiveSheets(row.def.key, row.sheets, scopedStyles);
+          ok++;
+        } catch (error) {
+          failNames.push(`${row.def.title}（${error instanceof Error ? error.message : '失败'}）`);
+        }
+      }
 
-    // 1. 同步预创建打印窗口（用户点击同步调用栈内，不会被拦截）
-    const preWin = window.open('', '_blank', 'width=1400,height=900');
-    if (!preWin) {
-      this.finishedSummary = '打印窗口被拦截，请允许弹出窗口后重试。';
-      this.cdr.detectChanges();
-      return;
-    }
-    // 窗口先显示加载提示
-    preWin.document.write('<!doctype html><html><head><meta charset="utf-8"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;font-size:18px;color:#888">正在准备打印，请稍候……</body></html>');
-    preWin.document.close();
-
-    // 2. 设置离屏舞台引用，用于提取 scoped 样式
-    if (this.stageWrap) {
-      this.service.setStageElement(this.stageWrap.nativeElement);
-    }
-
-    // 3. 异步渲染并采集
-    const ok = await this.prepare();
-    if (!ok || this.cancelled) {
-      try { preWin.close(); } catch { /* ignore */ }
-      return;
-    }
-
-    const ready = this.selectedRows.filter(r => r.state === 'ready');
-    const failed = this.selectedRows.filter(r => r.state === 'failed');
-    if (!ready.length) {
-      try { preWin.close(); } catch { /* ignore */ }
-      this.finishedSummary = '没有可打印的内容，请检查所选表单。';
-      this.cdr.detectChanges();
-      return;
-    }
-
-    // 4. 传入预创建窗口，分组打印
-    this.printing = true;
-    this.cdr.detectChanges();
-    try {
-      await this.service.printRows(ready, preWin);
-      this.finishedSummary = failed.length
-        ? `已发送 ${ready.length} 份；${failed.length} 份渲染失败，可单独打开该表单打印。`
-        : `已发送 ${ready.length} 份到打印机。`;
+      // 3. 汇总结果
+      const skipped = this.archiveTargets.length - ready.length;
+      const parts = [`已归档 ${ok} 份`];
+      if (failNames.length) { parts.push(`失败 ${failNames.length} 份：${failNames.join('、')}`); }
+      if (skipped > 0) { parts.push(`${skipped} 份渲染失败未归档`); }
+      if (this.cancelled && ok + failNames.length < ready.length) { parts.push('（已手动停止）'); }
+      this.finishedSummary = parts.join('；') + '。';
     } catch (error) {
-      this.finishedSummary = error instanceof Error ? error.message : '打印失败';
+      this.finishedSummary = error instanceof Error ? error.message : '归档失败';
     } finally {
-      this.printing = false;
+      this.archiving = false;
+      this.progressText = '';
       // 清空不再使用的 sheets HTML，释放内存
-      this.service.clearSheetCache(this.rows);
+      this.service.clearSheetCache(this.archiveTargets);
       this.cdr.detectChanges();
     }
   }
-
-  cancel(): void { this.cancelled = true; }
 
   formUrl(route: string): string { return `/form/${route}`; }
   trackRow(_: number, row: PrintRow): string { return row.def.key; }

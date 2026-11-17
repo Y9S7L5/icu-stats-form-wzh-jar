@@ -116,6 +116,7 @@ interface RenderPage {
           [disabled]="loading"
         ></app-print-page-multi-select>
         <button class="btn" (click)="onPrint()">打印</button>
+        <app-archive-button formKey="commitSuicideForm" [disabled]="loading"></app-archive-button>
       </div>
     </div>
 

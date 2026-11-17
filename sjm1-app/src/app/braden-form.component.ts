@@ -94,6 +94,7 @@ interface FinalExtraData { id: string | null; result: string; resultDate: string
             [disabled]="loading"
           ></app-print-page-multi-select>
           <button class="btn" type="button" (click)="print()">打印</button>
+          <app-archive-button formKey="bradenForm" [disabled]="loading"></app-archive-button>
         </div>
       </div>
 

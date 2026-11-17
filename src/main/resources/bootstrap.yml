@@ -17,3 +17,14 @@ server:
   port: ${SERVER_PORT:10242}
 
 hospitalLog: ${HOSPITAL_NAME:重钢总医院}
+
+# 无纸化归档（阶段一：仅保存）
+icu:
+  archive:
+    # PDF 落盘根目录：{root}/{pid}/{formKey}/{yyyyMMdd}/{archiveId}.pdf
+    root: ${ARCHIVE_ROOT:./archive}
+    # headless 浏览器可执行文件（source=html 的表单必配）。
+    # 麒麟V11 离线环境：/usr/local/bin/chrome-headless-archive（离线包 wrapper）
+    chrome-path: ${ARCHIVE_CHROME_PATH:chrome-headless-shell}
+    # 单次 HTML→PDF 渲染超时（秒）
+    render-timeout-seconds: ${ARCHIVE_RENDER_TIMEOUT:60}
